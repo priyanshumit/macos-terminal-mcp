@@ -1,0 +1,60 @@
+{
+  "name": "@priyanshumit/macos-terminal-mcp",
+  "version": "0.2.0",
+  "description": "MCP server exposing macOS Terminal.app to AI agents via AppleScript / JXA. List windows, read scrollback, execute commands, clear buffers — with three-tier safety patterns and confirmation dialogs.",
+  "type": "module",
+  "bin": {
+    "macos-terminal-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "terminal",
+    "macos",
+    "applescript",
+    "jxa",
+    "claude",
+    "ai",
+    "automation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priyanshumit/macos-terminal-mcp.git"
+  },
+  "homepage": "https://github.com/priyanshumit/macos-terminal-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/priyanshumit/macos-terminal-mcp/issues"
+  },
+  "author": "Priyanshu Mittal",
+  "license": "MIT"
+}
