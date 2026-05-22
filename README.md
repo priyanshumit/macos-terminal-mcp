@@ -1,4 +1,14 @@
-# macos-terminal-mcp
+<p align="center">
+  <img src="./assets/logo.png" alt="macos-terminal-mcp" width="200" height="200" />
+</p>
+
+<h1 align="center">macos-terminal-mcp</h1>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@priyanshumit/macos-terminal-mcp"><img src="https://img.shields.io/npm/v/@priyanshumit/macos-terminal-mcp.svg" alt="npm version"></a>
+  <a href="https://github.com/priyanshumit/macos-terminal-mcp/actions/workflows/ci.yml"><img src="https://github.com/priyanshumit/macos-terminal-mcp/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/@priyanshumit/macos-terminal-mcp.svg" alt="MIT license"></a>
+</p>
 
 A local MCP server that lets AI agents inspect and drive your macOS Terminal.app tabs — list windows, read scrollback, execute commands, and clear buffers, all gated by a three-tier safety model plus per-call user confirmation for any write operation.
 
