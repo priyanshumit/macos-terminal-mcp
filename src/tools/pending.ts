@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
@@ -38,7 +39,10 @@ function registerApprove(server: McpServer): void {
       description:
         "Approve a queued command by its id. Triggers a native confirmation dialog showing the queued command details before resolving. Requires WRITE_TOOLS_ENABLED=1. Calling this races with the native dialog originally raised by terminal_execute — whichever resolves first wins.",
       inputSchema: {
-        id: z.string().uuid().describe("Pending queue entry id (from pending_list or terminal_execute response)"),
+        id: z
+          .string()
+          .uuid()
+          .describe("Pending queue entry id (from pending_list or terminal_execute response)"),
       },
     },
     async ({ id }): Promise<CallToolResult> => {
@@ -67,6 +71,14 @@ function registerApprove(server: McpServer): void {
           `Queue id: ${id}`,
       });
       if (!allowed) {
+        await appendAudit({
+          tool: "pending_approve",
+          outcome: "denied",
+          tty: entry.tty,
+          command: entry.command,
+          source: "dialog",
+          details: { queueId: id },
+        });
         return asTextResult("User denied the approval.", true);
       }
       const ok = resolvePending(id, true, "queue");
@@ -76,6 +88,14 @@ function registerApprove(server: McpServer): void {
           true,
         );
       }
+      await appendAudit({
+        tool: "pending_approve",
+        outcome: "success",
+        tty: entry.tty,
+        command: entry.command,
+        source: "queue",
+        details: { queueId: id },
+      });
       return asTextResult(`Approved ${id}.`);
     },
   );
@@ -122,11 +142,16 @@ function registerDeny(server: McpServer): void {
       }
       const ok = resolvePending(id, false, "queue", reason);
       if (!ok) {
-        return asTextResult(
-          `Entry ${id} was already resolved by another path.`,
-          true,
-        );
+        return asTextResult(`Entry ${id} was already resolved by another path.`, true);
       }
+      await appendAudit({
+        tool: "pending_deny",
+        outcome: "success",
+        tty: entry.tty,
+        command: entry.command,
+        source: "queue",
+        details: { queueId: id, ...(reason ? { reason } : {}) },
+      });
       return asTextResult(`Denied ${id}${reason ? `: ${reason}` : ""}.`);
     },
   );

@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { OsascriptError, runJxa } from "../applescript.js";
+import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
@@ -54,6 +55,14 @@ export async function executeHandler({ tty, command }: ExecuteInput): Promise<Ca
 
   if (verdict.level === "forbidden") {
     const descPart = verdict.matchedDescription ? ` (${verdict.matchedDescription})` : "";
+    await appendAudit({
+      tool: "terminal_execute",
+      outcome: "refused",
+      tty,
+      command,
+      level: "forbidden",
+      matchedPattern: verdict.matchedPattern,
+    });
     return {
       content: [
         {
@@ -93,6 +102,16 @@ export async function executeHandler({ tty, command }: ExecuteInput): Promise<Ca
     const result = await promise;
     if (!result.approved) {
       const reasonPart = result.reason ? ` (${result.reason})` : "";
+      await appendAudit({
+        tool: "terminal_execute",
+        outcome: "denied",
+        tty,
+        command,
+        level: "requires_approval",
+        matchedPattern: verdict.matchedPattern,
+        source: result.source,
+        ...(result.reason ? { details: { reason: result.reason } } : {}),
+      });
       return {
         content: [
           {
@@ -112,6 +131,15 @@ export async function executeHandler({ tty, command }: ExecuteInput): Promise<Ca
       verdict.level === "safe"
         ? `auto-run (safe pattern: ${verdict.matchedPattern})`
         : `approved via ${resolutionSource}`;
+    await appendAudit({
+      tool: "terminal_execute",
+      outcome: "success",
+      tty,
+      command,
+      level: verdict.level,
+      matchedPattern: verdict.matchedPattern,
+      source: verdict.level === "safe" ? "auto" : resolutionSource,
+    });
     return {
       content: [
         {
@@ -126,6 +154,15 @@ export async function executeHandler({ tty, command }: ExecuteInput): Promise<Ca
       err instanceof OsascriptError && /not authorized/i.test(err.stderr)
         ? "\nAutomation permission missing — System Settings → Privacy & Security → Automation."
         : "";
+    await appendAudit({
+      tool: "terminal_execute",
+      outcome: "error",
+      tty,
+      command,
+      level: verdict.level,
+      matchedPattern: verdict.matchedPattern,
+      errorMessage: message,
+    });
     return {
       content: [{ type: "text", text: `terminal_execute failed: ${message}${hint}` }],
       isError: true,
@@ -144,11 +181,7 @@ export function register(server: McpServer): void {
           .string()
           .regex(/^\/dev\/ttys[0-9]+$/)
           .describe('Target tab tty, e.g. "/dev/ttys003"'),
-        command: z
-          .string()
-          .min(1)
-          .max(8192)
-          .describe("Shell command to run in the target tab"),
+        command: z.string().min(1).max(8192).describe("Shell command to run in the target tab"),
       },
     },
     executeHandler,

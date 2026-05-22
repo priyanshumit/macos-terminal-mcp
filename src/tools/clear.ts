@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { OsascriptError, runJxa } from "../applescript.js";
+import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
@@ -63,11 +64,23 @@ export async function clearHandler({ tty }: ClearInput): Promise<CallToolResult>
   }
 
   if (!allowed) {
+    await appendAudit({
+      tool: "terminal_clear",
+      outcome: "denied",
+      tty,
+      source: "dialog",
+    });
     return { content: [{ type: "text", text: "User denied the clear." }], isError: true };
   }
 
   try {
     await runJxa(buildClearScript(tty));
+    await appendAudit({
+      tool: "terminal_clear",
+      outcome: "success",
+      tty,
+      source: "dialog",
+    });
     return { content: [{ type: "text", text: `Cleared scrollback of ${tty}.` }] };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -75,6 +88,12 @@ export async function clearHandler({ tty }: ClearInput): Promise<CallToolResult>
       err instanceof OsascriptError && /not authorized/i.test(err.stderr)
         ? "\nMissing Automation OR Accessibility permission. Both are required for keystroke simulation."
         : "";
+    await appendAudit({
+      tool: "terminal_clear",
+      outcome: "error",
+      tty,
+      errorMessage: message,
+    });
     return {
       content: [{ type: "text", text: `terminal_clear failed: ${message}${hint}` }],
       isError: true,
@@ -87,7 +106,7 @@ export function register(server: McpServer): void {
     "terminal_clear",
     {
       description:
-        'Clear the buffer AND scrollback of a specific Terminal.app tab by simulating Cmd+K (Edit → Clear Scrollback). Side effect: briefly steals focus to Terminal.app to deliver the keystroke; the user may need to switch back to their previous app. Requires WRITE_TOOLS_ENABLED=1 and triggers a confirmation dialog.',
+        "Clear the buffer AND scrollback of a specific Terminal.app tab by simulating Cmd+K (Edit → Clear Scrollback). Side effect: briefly steals focus to Terminal.app to deliver the keystroke; the user may need to switch back to their previous app. Requires WRITE_TOOLS_ENABLED=1 and triggers a confirmation dialog.",
       inputSchema: {
         tty: z
           .string()

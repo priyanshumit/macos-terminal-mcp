@@ -38,12 +38,7 @@ export function runJxa(script: string, options: RunJxaOptions = {}): Promise<str
         /* ignore */
       }
       reject(
-        new OsascriptError(
-          `osascript timed out after ${timeoutMs}ms`,
-          stderr.trim(),
-          -1,
-          true,
-        ),
+        new OsascriptError(`osascript timed out after ${timeoutMs}ms`, stderr.trim(), -1, true),
       );
     }, timeoutMs);
 
@@ -80,10 +75,7 @@ export function runJxa(script: string, options: RunJxaOptions = {}): Promise<str
   });
 }
 
-export async function runJxaJson<T>(
-  script: string,
-  options: RunJxaOptions = {},
-): Promise<T> {
+export async function runJxaJson<T>(script: string, options: RunJxaOptions = {}): Promise<T> {
   const output = await runJxa(script, options);
   try {
     return JSON.parse(output) as T;

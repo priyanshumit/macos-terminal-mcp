@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  enqueue,
-  getPending,
-  listPending,
-  resolvePending,
-} from "../../src/safety/queue.js";
+import { enqueue, getPending, listPending, resolvePending } from "../../src/safety/queue.js";
 
 describe("queue: enqueue + resolve", () => {
   it("makes the entry visible via listPending", async () => {

@@ -14,12 +14,7 @@ export interface SafetyConfig {
   patterns: PatternEntry[];
 }
 
-export const SAFETY_CONFIG_PATH = join(
-  homedir(),
-  ".config",
-  "macos-terminal-mcp",
-  "safety.json",
-);
+export const SAFETY_CONFIG_PATH = join(homedir(), ".config", "macos-terminal-mcp", "safety.json");
 
 const DEFAULT_PATTERNS: PatternEntry[] = [
   // FORBIDDEN — never run, even with confirmation. The user must run these in a terminal themselves.
@@ -102,9 +97,7 @@ const DEFAULT_PATTERNS: PatternEntry[] = [
   { pattern: "^python3?\\s+--version\\b", level: "safe" },
 ];
 
-export async function loadSafetyConfig(
-  path: string = SAFETY_CONFIG_PATH,
-): Promise<SafetyConfig> {
+export async function loadSafetyConfig(path: string = SAFETY_CONFIG_PATH): Promise<SafetyConfig> {
   try {
     const raw = await readFile(path, "utf8");
     const parsed: unknown = JSON.parse(raw);

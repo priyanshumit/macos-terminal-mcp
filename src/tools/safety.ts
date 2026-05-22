@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
@@ -9,8 +10,8 @@ import {
 import {
   loadSafetyConfig,
   type PatternEntry,
-  saveSafetyConfig,
   type SafetyLevel,
+  saveSafetyConfig,
 } from "../safety/patterns.js";
 
 const LEVEL_VALUES = ["safe", "requires_approval", "forbidden"] as const;
@@ -66,9 +67,7 @@ function registerAdd(server: McpServer): void {
           .min(1)
           .max(500)
           .describe("Regex pattern (JavaScript syntax) to match against commands"),
-        level: z
-          .enum(LEVEL_VALUES)
-          .describe("Safety level: safe, requires_approval, or forbidden"),
+        level: z.enum(LEVEL_VALUES).describe("Safety level: safe, requires_approval, or forbidden"),
         description: z
           .string()
           .max(500)
@@ -103,12 +102,26 @@ function registerAdd(server: McpServer): void {
           descLine,
       });
       if (!allowed) {
+        await appendAudit({
+          tool: "safety_add",
+          outcome: "denied",
+          pattern,
+          level,
+          source: "dialog",
+        });
         return asTextResult("User denied the safety policy change.", true);
       }
 
       const newEntry: PatternEntry = { pattern, level, ...(description ? { description } : {}) };
       const updated = { patterns: [...config.patterns, newEntry] };
       await saveSafetyConfig(updated);
+      await appendAudit({
+        tool: "safety_add",
+        outcome: "success",
+        pattern,
+        level,
+        source: "dialog",
+      });
       return asTextResult(
         `Added pattern "${pattern}" with level ${level}. ${updated.patterns.length} patterns total.`,
       );
@@ -155,6 +168,13 @@ function registerRemove(server: McpServer): void {
           descLine,
       });
       if (!allowed) {
+        await appendAudit({
+          tool: "safety_remove",
+          outcome: "denied",
+          pattern,
+          level: existing.level,
+          source: "dialog",
+        });
         return asTextResult("User denied the safety policy change.", true);
       }
 
@@ -162,6 +182,13 @@ function registerRemove(server: McpServer): void {
         patterns: config.patterns.filter((p) => p.pattern !== pattern),
       };
       await saveSafetyConfig(updated);
+      await appendAudit({
+        tool: "safety_remove",
+        outcome: "success",
+        pattern,
+        level: existing.level,
+        source: "dialog",
+      });
       return asTextResult(
         `Removed pattern "${pattern}". ${updated.patterns.length} patterns remain.`,
       );
@@ -210,18 +237,30 @@ function registerSetLevel(server: McpServer): void {
           `To:   ${describeLevel(level)}`,
       });
       if (!allowed) {
+        await appendAudit({
+          tool: "safety_set_level",
+          outcome: "denied",
+          pattern,
+          level,
+          source: "dialog",
+          details: { from: existing.level, to: level },
+        });
         return asTextResult("User denied the safety policy change.", true);
       }
 
       const updated = {
-        patterns: config.patterns.map((p) =>
-          p.pattern === pattern ? { ...p, level } : p,
-        ),
+        patterns: config.patterns.map((p) => (p.pattern === pattern ? { ...p, level } : p)),
       };
       await saveSafetyConfig(updated);
-      return asTextResult(
-        `Changed "${pattern}" from ${existing.level} to ${level}.`,
-      );
+      await appendAudit({
+        tool: "safety_set_level",
+        outcome: "success",
+        pattern,
+        level,
+        source: "dialog",
+        details: { from: existing.level, to: level },
+      });
+      return asTextResult(`Changed "${pattern}" from ${existing.level} to ${level}.`);
     },
   );
 }

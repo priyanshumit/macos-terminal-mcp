@@ -1,6 +1,6 @@
 {
   "name": "@priyanshumit/macos-terminal-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server exposing macOS Terminal.app to AI agents via AppleScript / JXA. List windows, read scrollback, execute commands, clear buffers — with three-tier safety patterns and confirmation dialogs.",
   "type": "module",
   "bin": {
@@ -18,13 +18,17 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run test && npm run build"
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
