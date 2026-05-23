@@ -127,4 +127,22 @@ describe("terminal_new_tab handler", () => {
     expect(text).toMatch(/terminal_new_tab failed/);
     expect(text).toMatch(/Accessibility/);
   });
+
+  // Regression: v0.5.2 known-issue — activate() returns before the window
+  // server makes Terminal frontmost, so the keystroke can land on whichever
+  // app was previously frontmost (opens new window instead of new tab). Fix:
+  // insert a small delay between activate() and the keystroke.
+  it("inserts a post-activate delay before the keystroke", async () => {
+    mockedRunJxa.mockResolvedValue('{"tty":"/dev/ttys099","windowId":131200}');
+
+    await newTabHandler();
+
+    const script = (mockedRunJxa.mock.calls[0]?.[0] as string) ?? "";
+    const activateIdx = script.indexOf("terminal.activate()");
+    const delayIdx = script.indexOf("delay(0.15)");
+    const keystrokeIdx = script.indexOf("systemEvents.keystroke");
+    expect(activateIdx).toBeGreaterThan(-1);
+    expect(delayIdx).toBeGreaterThan(activateIdx);
+    expect(keystrokeIdx).toBeGreaterThan(delayIdx);
+  });
 });

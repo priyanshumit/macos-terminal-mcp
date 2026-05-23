@@ -26,6 +26,10 @@ function snapshotTabs(terminal) {
   const terminal = Application("Terminal");
   const systemEvents = Application("System Events");
   terminal.activate();
+  // activate() returns before the window server actually makes Terminal frontmost.
+  // Without this delay, the Cmd+T keystroke can land on whichever app was
+  // frontmost when the call started, opening a new window instead of a new tab.
+  delay(0.15);
   const before = snapshotTabs(terminal);
   const wasEmpty = Object.keys(before).length === 0;
   // Cmd+T opens a new tab in the front window; Cmd+N opens a new window when
