@@ -6,6 +6,7 @@ import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
+  sanitizeAiText,
   writeToolsDisabledMessage,
 } from "../safety/confirm.js";
 import { evaluateCommand, loadSafetyConfig } from "../safety/patterns.js";
@@ -79,9 +80,9 @@ export async function executeHandler({ tty, command }: ExecuteInput): Promise<Ca
   let resolutionSource: "dialog" | "queue" | "expired" | "auto" = "auto";
   if (verdict.level === "requires_approval") {
     const descPart = verdict.matchedDescription
-      ? `\nMatched: ${verdict.matchedPattern} (${verdict.matchedDescription})`
+      ? `\nMatched: ${sanitizeAiText(verdict.matchedPattern ?? "")} (${sanitizeAiText(verdict.matchedDescription)})`
       : verdict.matchedPattern
-        ? `\nMatched pattern: ${verdict.matchedPattern}`
+        ? `\nMatched pattern: ${sanitizeAiText(verdict.matchedPattern)}`
         : "\nNo matching pattern — default policy requires approval.";
 
     const { id, promise } = enqueue({
@@ -93,7 +94,7 @@ export async function executeHandler({ tty, command }: ExecuteInput): Promise<Ca
 
     void confirmWithUser({
       title: "macos-terminal-mcp · terminal_execute",
-      message: `Run in ${tty}:\n\n${truncate(command, 800)}${descPart}\n\nQueue id: ${id}`,
+      message: `Run in ${tty}:\n\n${sanitizeAiText(truncate(command, 800))}${descPart}\n\nQueue id: ${id}`,
     }).then(
       (allowed) => resolvePending(id, allowed, "dialog"),
       () => undefined,

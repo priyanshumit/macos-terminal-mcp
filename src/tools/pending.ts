@@ -5,6 +5,7 @@ import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
+  sanitizeAiText,
   writeToolsDisabledMessage,
 } from "../safety/confirm.js";
 import { getPending, listPending, resolvePending } from "../safety/queue.js";
@@ -58,16 +59,16 @@ function registerApprove(server: McpServer): void {
       }
 
       const descPart = entry.matchedDescription
-        ? `\nMatched: ${entry.matchedPattern} (${entry.matchedDescription})`
+        ? `\nMatched: ${sanitizeAiText(entry.matchedPattern ?? "")} (${sanitizeAiText(entry.matchedDescription)})`
         : entry.matchedPattern
-          ? `\nMatched pattern: ${entry.matchedPattern}`
+          ? `\nMatched pattern: ${sanitizeAiText(entry.matchedPattern)}`
           : "";
       const allowed = await confirmWithUser({
         title: "macos-terminal-mcp · pending_approve",
         message:
           `Approve queued command?\n\n` +
           `Target: ${entry.tty}\n` +
-          `Command: ${truncate(entry.command, 800)}${descPart}\n` +
+          `Command: ${sanitizeAiText(truncate(entry.command, 800))}${descPart}\n` +
           `Queue id: ${id}`,
       });
       if (!allowed) {
@@ -128,13 +129,13 @@ function registerDeny(server: McpServer): void {
         );
       }
 
-      const reasonPart = reason ? `\n\nReason: ${reason}` : "";
+      const reasonPart = reason ? `\n\nReason: ${sanitizeAiText(reason)}` : "";
       const allowed = await confirmWithUser({
         title: "macos-terminal-mcp · pending_deny",
         message:
           `Deny queued command?\n\n` +
           `Target: ${entry.tty}\n` +
-          `Command: ${truncate(entry.command, 800)}\n` +
+          `Command: ${sanitizeAiText(truncate(entry.command, 800))}\n` +
           `Queue id: ${id}${reasonPart}`,
       });
       if (!allowed) {

@@ -5,25 +5,18 @@ import { appendAudit } from "../safety/audit.js";
 import {
   confirmWithUser,
   isWriteToolsEnabled,
+  sanitizeAiText,
   writeToolsDisabledMessage,
 } from "../safety/confirm.js";
 import {
   loadSafetyConfig,
   type PatternEntry,
+  regexErrorReason,
   type SafetyLevel,
   saveSafetyConfig,
 } from "../safety/patterns.js";
 
 const LEVEL_VALUES = ["safe", "requires_approval", "forbidden"] as const;
-
-function isValidRegex(pattern: string): boolean {
-  try {
-    new RegExp(pattern);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function asTextResult(text: string, isError = false): CallToolResult {
   return { content: [{ type: "text", text }], ...(isError ? { isError } : {}) };
@@ -79,8 +72,9 @@ function registerAdd(server: McpServer): void {
       if (!isWriteToolsEnabled()) {
         return asTextResult(writeToolsDisabledMessage("safety_add"), true);
       }
-      if (!isValidRegex(pattern)) {
-        return asTextResult(`Refused: "${pattern}" is not a valid regex.`, true);
+      const reason = regexErrorReason(pattern);
+      if (reason !== null) {
+        return asTextResult(`Refused: pattern ${JSON.stringify(pattern)} ${reason}.`, true);
       }
 
       const config = await loadSafetyConfig();
@@ -92,12 +86,12 @@ function registerAdd(server: McpServer): void {
         );
       }
 
-      const descLine = description ? `\nDescription: ${description}` : "";
+      const descLine = description ? `\nDescription: ${sanitizeAiText(description)}` : "";
       const allowed = await confirmWithUser({
         title: "macos-terminal-mcp · safety_add",
         message:
           `Add safety pattern?\n\n` +
-          `Pattern: ${pattern}\n` +
+          `Pattern: ${sanitizeAiText(pattern)}\n` +
           `Level:   ${describeLevel(level)}` +
           descLine,
       });
@@ -112,8 +106,18 @@ function registerAdd(server: McpServer): void {
         return asTextResult("User denied the safety policy change.", true);
       }
 
+      // Re-read after dialog approval — the 5-minute dialog window is long
+      // enough for another concurrent mutator to have changed the file. Apply
+      // our change to the freshest config we can read, not the pre-dialog snapshot.
+      const fresh = await loadSafetyConfig();
+      if (fresh.patterns.some((p) => p.pattern === pattern)) {
+        return asTextResult(
+          `Pattern was added by another action while this dialog was open. Re-run safety_add if you still want to apply this change.`,
+          true,
+        );
+      }
       const newEntry: PatternEntry = { pattern, level, ...(description ? { description } : {}) };
-      const updated = { patterns: [...config.patterns, newEntry] };
+      const updated = { patterns: [...fresh.patterns, newEntry] };
       await saveSafetyConfig(updated);
       await appendAudit({
         tool: "safety_add",
@@ -157,13 +161,15 @@ function registerRemove(server: McpServer): void {
         existing.level === "forbidden"
           ? "⚠ WARNING: this pattern is currently FORBIDDEN. Removing it weakens safety.\n\n"
           : "";
-      const descLine = existing.description ? `\nDescription: ${existing.description}` : "";
+      const descLine = existing.description
+        ? `\nDescription: ${sanitizeAiText(existing.description)}`
+        : "";
 
       const allowed = await confirmWithUser({
         title: "macos-terminal-mcp · safety_remove",
         message:
           `${warning}Remove safety pattern?\n\n` +
-          `Pattern: ${pattern}\n` +
+          `Pattern: ${sanitizeAiText(pattern)}\n` +
           `Current level: ${describeLevel(existing.level)}` +
           descLine,
       });
@@ -178,8 +184,16 @@ function registerRemove(server: McpServer): void {
         return asTextResult("User denied the safety policy change.", true);
       }
 
+      // Re-read after dialog approval (see safety_add for rationale).
+      const fresh = await loadSafetyConfig();
+      if (!fresh.patterns.some((p) => p.pattern === pattern)) {
+        return asTextResult(
+          `Pattern was already removed by another action while this dialog was open.`,
+          true,
+        );
+      }
       const updated = {
-        patterns: config.patterns.filter((p) => p.pattern !== pattern),
+        patterns: fresh.patterns.filter((p) => p.pattern !== pattern),
       };
       await saveSafetyConfig(updated);
       await appendAudit({
@@ -232,7 +246,7 @@ function registerSetLevel(server: McpServer): void {
         title: "macos-terminal-mcp · safety_set_level",
         message:
           `${warning}Change pattern level?\n\n` +
-          `Pattern: ${pattern}\n` +
+          `Pattern: ${sanitizeAiText(pattern)}\n` +
           `From: ${describeLevel(existing.level)}\n` +
           `To:   ${describeLevel(level)}`,
       });
@@ -248,8 +262,22 @@ function registerSetLevel(server: McpServer): void {
         return asTextResult("User denied the safety policy change.", true);
       }
 
+      // Re-read after dialog approval (see safety_add for rationale).
+      const fresh = await loadSafetyConfig();
+      const freshExisting = fresh.patterns.find((p) => p.pattern === pattern);
+      if (!freshExisting) {
+        return asTextResult(
+          `Pattern was removed by another action while this dialog was open.`,
+          true,
+        );
+      }
+      if (freshExisting.level === level) {
+        return asTextResult(
+          `Pattern is already at level ${level} (changed by another action while this dialog was open).`,
+        );
+      }
       const updated = {
-        patterns: config.patterns.map((p) => (p.pattern === pattern ? { ...p, level } : p)),
+        patterns: fresh.patterns.map((p) => (p.pattern === pattern ? { ...p, level } : p)),
       };
       await saveSafetyConfig(updated);
       await appendAudit({

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -82,5 +82,38 @@ describe("appendAudit", () => {
     await appendAudit({ tool: "y", outcome: "success" }, nestedPath);
     const content = await readFile(nestedPath, "utf8");
     expect(content).toContain('"tool":"y"');
+  });
+
+  it("creates the audit log file with mode 0o600 (owner read/write only)", async () => {
+    await appendAudit({ tool: "perm-check", outcome: "success" }, tmpPath);
+    const s = await stat(tmpPath);
+    expect(s.mode & 0o777).toBe(0o600);
+  });
+
+  it("tightens permissions on a pre-existing wider file", async () => {
+    // Create with wider perms first (simulate v0.3.0 leftover)
+    await appendAudit({ tool: "first-write", outcome: "success" }, tmpPath);
+    const { chmod } = await import("node:fs/promises");
+    await chmod(tmpPath, 0o644);
+    await appendAudit({ tool: "second-write", outcome: "success" }, tmpPath);
+    const s = await stat(tmpPath);
+    expect(s.mode & 0o777).toBe(0o600);
+  });
+
+  it("ignores any caller-supplied timestamp (server-generated only)", async () => {
+    const before = new Date().toISOString();
+    // Cast to bypass the type guard — simulates a runtime call that smuggles
+    // a timestamp field in. The fix relies on spread-order, not just types.
+    await appendAudit(
+      { tool: "x", outcome: "success", timestamp: "1990-01-01T00:00:00.000Z" } as Parameters<
+        typeof appendAudit
+      >[0],
+      tmpPath,
+    );
+    const after = new Date().toISOString();
+    const entry = JSON.parse((await readFile(tmpPath, "utf8")).trim()) as { timestamp: string };
+    expect(entry.timestamp).not.toBe("1990-01-01T00:00:00.000Z");
+    expect(entry.timestamp >= before).toBe(true);
+    expect(entry.timestamp <= after).toBe(true);
   });
 });

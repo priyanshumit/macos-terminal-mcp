@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-23
+
+This is a security-hardening release driven by an end-to-end audit of the v0.3.0 codebase. Six findings (one HIGH, three MEDIUM, two LOW) are addressed; one LOW finding was deliberately deferred (see CHANGELOG for v0.5.x roadmap).
+
+### Security
+
+- **[HIGH] ReDoS guard** — `safety_add` now rejects regex patterns with catastrophic-backtracking constructs (nested quantifiers, overlapping repeats, ambiguous alternations) using the `safe-regex` npm package. `normalizeConfig` filters such patterns at load time with a stderr warning. Without this, a single malicious pattern in `safety.json` could hang the MCP server's event loop on every `terminal_execute` call.
+- **[MEDIUM] Audit log permissions tightened** — `~/.local/state/macos-terminal-mcp/audit.log` is now created with mode `0o600` (owner read/write only) and its parent directory with mode `0o700`. Pre-existing wider permissions are tightened on every write. Closes a local-user information disclosure where command text (potentially containing secrets) was world-readable.
+- **[MEDIUM] Dialog injection guard** — AI-supplied strings (command, pattern, description, reason, matched-pattern metadata) embedded in confirmation dialogs are now passed through a `sanitizeAiText` helper that replaces C0 control characters (newlines, CR, tabs, NUL, DEL, etc.) with spaces. Prevents a model from injecting fake "Queue id:" or "Approval: GRANTED" lines inside dialog message templates.
+- **[MEDIUM] TOCTOU race fixed** — `safety_add` / `safety_remove` / `safety_set_level` now re-read the safety config from disk immediately after dialog approval, before writing. Previously, two concurrent mutators with overlapping 5-minute dialogs could silently clobber each other's changes. If the file has changed in a way that conflicts with the current change, the tool now returns an error suggesting the user re-run.
+- **[LOW] Unicode homoglyph normalization** — `evaluateCommand` calls `command.normalize("NFKC")` before pattern evaluation. Closes the `ｒｍ -rf` (fullwidth Unicode) bypass of `\brm\s+-rf?\b`.
+- **[LOW] Audit timestamp hardened** — `appendAudit` no longer accepts a caller-supplied timestamp (type-level removal plus spread-order ensures the server-generated timestamp wins even against type-cast bypasses).
+
+### Deferred (not in this release)
+
+- **[LOW] Defense-in-depth against external `safety.json` replacement** — adding a hardcoded never-overridable forbidden list. Deferred because if a local process can write to `~/.config/macos-terminal-mcp/`, it can equally write to `node_modules/`. The fix's cost (architectural complexity around "which forbidden list wins") exceeds the marginal threat-model benefit. Will revisit if threat model changes.
+
+### Internal
+
+- Added `safe-regex` dependency.
+- Test count: 53 → **73** (20 new regression tests across `tests/safety/patterns.test.ts`, `tests/safety/audit.test.ts`, and the new `tests/safety/confirm.test.ts`).
+- Lint passes; `prepublishOnly` continues to gate on lint + typecheck + tests + build.
+
 ## [0.3.0] - 2026-05-22
 
 ### Added
@@ -41,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NPM-publish-ready packaging**: scoped name `@priyanshumit/macos-terminal-mcp`, shebang preserved, executable bit set, `publishConfig.access: public`, `files: ["dist", "README.md", "LICENSE"]`.
 - MIT license, comprehensive README with setup, permissions, scrollback config, three-tier safety reference, troubleshooting.
 
-[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/priyanshumit/macos-terminal-mcp/releases/tag/v0.2.0

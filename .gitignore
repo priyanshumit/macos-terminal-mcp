@@ -4,3 +4,5 @@ dist/
 .DS_Store
 .env
 .env.local
+# Local Claude Code MCP config — user-specific (env vars, paths).
+.mcp.json

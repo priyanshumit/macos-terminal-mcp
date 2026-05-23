@@ -48,6 +48,24 @@ app.includeStandardAdditions = true;
   return result.trim() === "ALLOW";
 }
 
+/**
+ * Strip C0 control characters (including newlines, tabs, CR) from AI-supplied
+ * strings before embedding them in confirmation dialog message templates.
+ *
+ * Without this, a model can inject fake structured fields like "Queue id: ..."
+ * or "Approval: GRANTED" inside a dialog's text by including newlines in its
+ * command/description, visually impersonating system-rendered content.
+ */
+// Pattern is constructed via new RegExp(string) to avoid embedding literal
+// control bytes in the source file (which Biome flags and which is also hard
+// to audit visually). Matches C0 control characters (U+0000–U+001F) plus DEL.
+// biome-ignore lint/complexity/useRegexLiterals: regex-literal form trips noControlCharactersInRegex on the same character class (escape sequences vs bytes both flagged). RegExp(string) avoids the false positive without obscuring intent.
+const CONTROL_CHARS_RE = new RegExp("[\u0000-\u001F\u007F]", "g");
+
+export function sanitizeAiText(s: string): string {
+  return s.replace(CONTROL_CHARS_RE, " ");
+}
+
 export function writeToolsDisabledMessage(toolName: string): string {
   return (
     `${toolName} is disabled. Write tools (terminal_execute, terminal_clear, safety_*) ` +

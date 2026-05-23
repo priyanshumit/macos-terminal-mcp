@@ -1,6 +1,6 @@
 {
   "name": "@priyanshumit/macos-terminal-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server exposing macOS Terminal.app to AI agents via AppleScript / JXA. List windows, read scrollback, execute commands, clear buffers — with three-tier safety patterns and confirmation dialogs.",
   "type": "module",
   "bin": {
@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
+    "@types/safe-regex": "^1.1.6",
+    "safe-regex": "^2.1.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {

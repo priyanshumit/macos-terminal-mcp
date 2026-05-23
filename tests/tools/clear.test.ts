@@ -17,11 +17,15 @@ vi.mock("../../src/applescript.js", () => ({
   },
 }));
 
-vi.mock("../../src/safety/confirm.js", () => ({
-  confirmWithUser: vi.fn(),
-  isWriteToolsEnabled: vi.fn(),
-  writeToolsDisabledMessage: (name: string) => `${name} disabled`,
-}));
+vi.mock("../../src/safety/confirm.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/safety/confirm.js")>();
+  return {
+    ...actual,
+    confirmWithUser: vi.fn(),
+    isWriteToolsEnabled: vi.fn(),
+    writeToolsDisabledMessage: (name: string) => `${name} disabled`,
+  };
+});
 
 import { runJxa } from "../../src/applescript.js";
 import { confirmWithUser, isWriteToolsEnabled } from "../../src/safety/confirm.js";

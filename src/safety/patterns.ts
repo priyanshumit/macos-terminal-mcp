@@ -1,8 +1,30 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import safeRegex from "safe-regex";
 
 export type SafetyLevel = "safe" | "requires_approval" | "forbidden";
+
+/**
+ * Reason a pattern is rejected, or null if the pattern is valid + safe.
+ * "Safe" here means: does not contain catastrophic-backtracking constructs
+ * (e.g. (a+)+b, (\w+)+!) that would let a single pattern DoS the server.
+ */
+export function regexErrorReason(pattern: string): string | null {
+  try {
+    new RegExp(pattern);
+  } catch (e) {
+    return `not a valid regex: ${(e as Error).message}`;
+  }
+  if (!safeRegex(pattern)) {
+    return "contains a ReDoS-prone construct (nested quantifiers, overlapping repeats, or ambiguous alternations)";
+  }
+  return null;
+}
+
+export function isSafePattern(pattern: string): boolean {
+  return regexErrorReason(pattern) === null;
+}
 
 export interface PatternEntry {
   pattern: string;
@@ -119,13 +141,22 @@ export function defaultPatterns(): PatternEntry[] {
   return DEFAULT_PATTERNS.map((p) => ({ ...p }));
 }
 
+function filterSafePatterns(patterns: PatternEntry[]): PatternEntry[] {
+  return patterns.filter((e) => {
+    if (isSafePattern(e.pattern)) return true;
+    process.stderr.write(
+      `[macos-terminal-mcp] dropping unsafe pattern from config: ${JSON.stringify(e.pattern)} (${regexErrorReason(e.pattern) ?? "unknown"})\n`,
+    );
+    return false;
+  });
+}
+
 export function normalizeConfig(raw: unknown): SafetyConfig {
   if (!raw || typeof raw !== "object") return { patterns: DEFAULT_PATTERNS };
   const o = raw as Record<string, unknown>;
   if (Array.isArray(o.patterns)) {
-    return {
-      patterns: o.patterns.filter((e: unknown): e is PatternEntry => isValidEntry(e)),
-    };
+    const valid = o.patterns.filter((e: unknown): e is PatternEntry => isValidEntry(e));
+    return { patterns: filterSafePatterns(valid) };
   }
   // Migrate v1 schema {allowlist: [], denylist: []} → v2 {patterns: [...]}
   if (Array.isArray(o.allowlist) || Array.isArray(o.denylist)) {
@@ -152,7 +183,8 @@ export function normalizeConfig(raw: unknown): SafetyConfig {
         }
       }
     }
-    return { patterns: patterns.length > 0 ? patterns : DEFAULT_PATTERNS };
+    const filtered = filterSafePatterns(patterns);
+    return { patterns: filtered.length > 0 ? filtered : DEFAULT_PATTERNS };
   }
   return { patterns: DEFAULT_PATTERNS };
 }
@@ -180,9 +212,13 @@ const LEVEL_RANK: Record<SafetyLevel, number> = {
 };
 
 export function evaluateCommand(command: string, config: SafetyConfig): SafetyVerdict {
+  // Normalize via NFKC so fullwidth/compatibility Unicode characters fold to
+  // their ASCII equivalents. Closes the ｒｍ -rf homoglyph bypass — a model
+  // submitting Unicode lookalikes can't sneak past patterns using \b assertions.
+  const normalized = command.normalize("NFKC");
   let result: SafetyVerdict | null = null;
   for (const entry of config.patterns) {
-    if (!testPattern(entry.pattern, command)) continue;
+    if (!testPattern(entry.pattern, normalized)) continue;
     if (!result || LEVEL_RANK[entry.level] > LEVEL_RANK[result.level]) {
       result = {
         level: entry.level,
