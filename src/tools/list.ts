@@ -12,7 +12,10 @@ function safe(fn) {
   const wins = terminal.windows();
   for (let wi = 0; wi < wins.length; wi++) {
     const w = wins[wi];
-    const tabs = w.tabs();
+    // Defensive: during in-progress window-close operations, w.tabs() can
+    // briefly return null instead of an empty array, which would crash this
+    // script. Treat null as no-tabs and move on.
+    const tabs = safe(function () { return w.tabs(); }) || [];
     for (let ti = 0; ti < tabs.length; ti++) {
       const t = tabs[ti];
       result.push({

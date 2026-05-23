@@ -7,13 +7,15 @@ import { isWriteToolsEnabled, writeToolsDisabledMessage } from "../safety/confir
 
 export function buildCloseTabScript(tty: string, force: boolean): string {
   return `
+var app = Application.currentApplication();
+app.includeStandardAdditions = true;
 function safe(fn) { try { return fn(); } catch (e) { return null; } }
 (function closeTab(targetTty, force) {
   const terminal = Application("Terminal");
   const wins = terminal.windows();
   for (let wi = 0; wi < wins.length; wi++) {
     const w = wins[wi];
-    const tabs = w.tabs();
+    const tabs = safe(function () { return w.tabs(); }) || [];
     for (let ti = 0; ti < tabs.length; ti++) {
       const t = tabs[ti];
       if (safe(function () { return t.tty(); }) === targetTty) {
@@ -21,11 +23,20 @@ function safe(fn) { try { return fn(); } catch (e) { return null; } }
         if (busy && !force) {
           return JSON.stringify({ status: "busy", tty: targetTty });
         }
-        // Terminal.app's AppleScript dictionary does NOT expose "close" on tab
-        // objects — only on window objects. Each tab is enumerated as its own
-        // "window" entry though (a quirk of the dictionary), so closing the
-        // enclosing "w" reference closes just this tab in the physical window.
-        w.close();
+        // Terminal.app's AppleScript dictionary does NOT expose "close" on
+        // tab objects. We previously called w.close() but that destroys the
+        // entire enclosing physical window, killing sibling tabs (verified
+        // live: a 3-tab window lost two tabs when closing one). The reliable
+        // way to close ONE specific tab mirrors the terminal_clear pattern:
+        // activate Terminal, make the target tab the key tab via frontmost +
+        // selected, settle, then send Cmd+W via System Events. Cmd+W on a
+        // selected tab closes only that tab.
+        terminal.activate();
+        try { Application("System Events").applicationProcesses["Terminal"].frontmost = true; } catch (e) { /* best-effort */ }
+        try { w.frontmost = true; } catch (e) { /* best-effort */ }
+        try { t.selected = true; } catch (e) { /* best-effort */ }
+        delay(0.3);
+        Application("System Events").keystroke("w", { using: "command down" });
         return JSON.stringify({ status: "closed", tty: targetTty, killedRunningCommand: busy });
       }
     }

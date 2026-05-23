@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-05-23
+
+A reviewer-flagged regression and two small polish items. The big one: `terminal_close_tab`'s v0.6.1 implementation called `w.close()` on the enclosing window reference under the assumption that each tab gets its own dictionary "window" object. Live retest (close one of 3 tabs in 1 window) showed that's only true for single-tab windows — a real multi-tab window closes ENTIRELY when any of its tab-wrapping references gets `.close()`. Sibling tabs were destroyed. v0.6.1 was published to npm with this bug.
+
+### Fixed
+
+- **`terminal_close_tab` no longer kills sibling tabs.** Switched from `w.close()` (closes the physical window) to a System Events `Cmd+W` pattern that mirrors `terminal_clear`'s `Cmd+K`: activate Terminal, select the target tab, settle, then send the keystroke. Cmd+W on a selected tab closes only that tab. As a side effect `terminal_close_tab` now also requires Accessibility permission — same gate as `terminal_clear`.
+- **`terminal_list` no longer crashes during transient window-close states.** Wrapped `w.tabs()` in the existing `safe()` helper. Previously, if a window was mid-close during an enumeration call, `w.tabs()` could return null and the script would crash with `TypeError: null is not an object (evaluating 'tabs.length')`. Surfaced immediately after `terminal_close_tab` calls.
+
+### Documented
+
+- README's macOS permissions section now lists `terminal_clear`, `terminal_new_tab`, AND `terminal_close_tab` as requiring Accessibility (previously only mentioned `terminal_clear`). First-time users following the setup steps will know what to grant.
+- `terminal_new_tab` cold-start branch has a comment acknowledging that under macOS "Reopen windows when logging back in," the tool may return one of several restored idle tabs rather than strictly "the one our `activate()` caused." The caller's contract ("give me a fresh idle tty") is still satisfied.
+
+### Known unfixed
+
+- Warm-path latency for `terminal_new_tab` is ~600ms minimum after v0.6.1's focus-dance changes. Deferred.
+- `terminal.running()` becomes true as soon as the OS marks Terminal as launching, before the AppleScript bridge is fully wired. Rare race; deferred.
+- The test suite's mocked `runJxa` means string-shape assertions catch refactoring drift but not actual runtime bugs (this v0.6.1 issue is the same class as the v0.5.0 `doScript("")` no-op). A future `tests/integration/` gated by `npm run test:integration` would close the gap. Deferred to v0.7.x.
+
 ## [0.6.1] - 2026-05-23
 
 Follow-up to v0.6.0 after live end-to-end testing of every new tool. Three real bugs surfaced that the v0.6.0 unit tests (all mocking `runJxa`) couldn't have caught.
@@ -151,7 +171,8 @@ This is a security-hardening release driven by an end-to-end audit of the v0.3.0
 - **NPM-publish-ready packaging**: scoped name `@priyanshumit/macos-terminal-mcp`, shebang preserved, executable bit set, `publishConfig.access: public`, `files: ["dist", "README.md", "LICENSE"]`.
 - MIT license, comprehensive README with setup, permissions, scrollback config, three-tier safety reference, troubleshooting.
 
-[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.1...v0.5.2

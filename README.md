@@ -90,7 +90,7 @@ First time the MCP server controls Terminal.app, macOS will prompt for permissio
 
 Click **OK**. The setting is remembered in **System Settings → Privacy & Security → Automation**.
 
-`terminal_clear` additionally requires **Accessibility** permission (it uses System Events to simulate Cmd+K). Grant under **System Settings → Privacy & Security → Accessibility**.
+`terminal_clear`, `terminal_new_tab`, and `terminal_close_tab` additionally require **Accessibility** permission — they use System Events to simulate Cmd+K, Cmd+T, and Cmd+W respectively. Grant under **System Settings → Privacy & Security → Accessibility**.
 
 ## Scrollback configuration
 
