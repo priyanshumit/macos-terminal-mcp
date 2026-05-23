@@ -95,10 +95,37 @@ describe("terminal_close_tab handler", () => {
     const script = buildCloseTabScript("/dev/ttys042", true);
     expect(script).toContain('"/dev/ttys042"');
     expect(script).toContain("true");
-    // Terminal.app's AppleScript dictionary doesn't expose close on tab objects,
-    // only on window objects. Since each tab is enumerated as its own "window",
-    // closing the enclosing `w` reference closes the tab.
-    expect(script).toContain("w.close()");
-    expect(script).not.toContain("t.close()");
+  });
+
+  // Regression: v0.6.1 used w.close() which closed the ENTIRE physical window,
+  // killing sibling tabs (verified live: a 3-tab window lost two tabs when
+  // closing one). The fix mirrors terminal_clear: activate Terminal, select
+  // the target tab, then send Cmd+W via System Events.
+  it("uses System Events Cmd+W on the selected tab, not w.close() or t.close()", () => {
+    const script = buildCloseTabScript("/dev/ttys042", false);
+    // Must use the keystroke path
+    expect(script).toContain("System Events");
+    expect(script).toMatch(/keystroke\(\s*"w"/);
+    expect(script).toContain("command down");
+    // Must NOT use the broken close-verb approaches (as actual statements; the
+    // explanatory comment in the JXA references them by name, which is fine).
+    expect(script).not.toMatch(/\bw\.close\(\)\s*;/);
+    expect(script).not.toMatch(/\bt\.close\(\)\s*;/);
+  });
+
+  it("selects the target tab and forces frontmost before Cmd+W (race fix)", () => {
+    const script = buildCloseTabScript("/dev/ttys042", false);
+    const activateIdx = script.search(/terminal\.activate\(\)/);
+    const selectedIdx = script.search(/\.selected\s*=\s*true/);
+    const delayIdx = script.search(/delay\(\s*0\.[1-9]/);
+    const keystrokeIdx = script.search(/keystroke\(\s*"w"/);
+    expect(activateIdx).toBeGreaterThanOrEqual(0);
+    expect(selectedIdx).toBeGreaterThanOrEqual(0);
+    expect(delayIdx).toBeGreaterThanOrEqual(0);
+    expect(keystrokeIdx).toBeGreaterThanOrEqual(0);
+    // Order: activate → selected → delay → Cmd+W
+    expect(activateIdx).toBeLessThan(selectedIdx);
+    expect(selectedIdx).toBeLessThan(delayIdx);
+    expect(delayIdx).toBeLessThan(keystrokeIdx);
   });
 });

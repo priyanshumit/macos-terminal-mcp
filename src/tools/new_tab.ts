@@ -47,6 +47,13 @@ function snapshotTabs(terminal) {
     // before, ANY tab that exists now is the new one we owe the caller — return
     // it directly. Don't ALSO send Cmd+T (which would create a second tab the
     // caller didn't ask for; reported by user during v0.6.1 verification).
+    //
+    // Caveat: if macOS "Reopen windows when logging back in" is on, Terminal
+    // may restore multiple tabs from a prior session. In that case launchedKeys
+    // has >1 entry and we return whichever Object.keys lists first — which is
+    // an idle tty the caller can use, but not strictly "the one our activate()
+    // caused to exist." Acceptable since the tool's contract is "give me a
+    // fresh idle tty," not "give me the exact tty just spawned."
     const afterLaunch = snapshotTabs(terminal);
     const launchedKeys = Object.keys(afterLaunch);
     if (launchedKeys.length > 0) {
