@@ -1,4 +1,4 @@
-import { runJxa } from "../applescript.js";
+import { OsascriptError, runJxa } from "../applescript.js";
 
 export function isWriteToolsEnabled(): boolean {
   return process.env.WRITE_TOOLS_ENABLED === "1";
@@ -11,6 +11,8 @@ export interface ConfirmRequest {
   denyLabel?: string;
   /** Auto-dismiss the dialog after this many seconds (treated as denial). Default 300 (5 min). */
   timeoutSeconds?: number;
+  /** Programmatically dismiss the dialog. SIGKILLs the underlying osascript child so the dialog disappears from the user's screen. Use when an out-of-band approval (e.g. pending_approve) has already resolved the awaiting flow. */
+  signal?: AbortSignal;
 }
 
 const DEFAULT_DIALOG_TIMEOUT_SEC = 300;
@@ -44,8 +46,20 @@ app.includeStandardAdditions = true;
 `;
   // Outer osascript timeout is dialog timeout + 10s buffer so the dialog's own
   // givingUpAfter has a chance to fire before the spawn-level kill engages.
-  const result = await runJxa(script, { timeoutMs: (timeoutSec + 10) * 1000 });
-  return result.trim() === "ALLOW";
+  try {
+    const result = await runJxa(script, {
+      timeoutMs: (timeoutSec + 10) * 1000,
+      signal: req.signal,
+    });
+    return result.trim() === "ALLOW";
+  } catch (err) {
+    // Aborted via signal — treat as denial. Caller is responsible for its own
+    // out-of-band approval path (e.g. queue resolution); we just dismiss the dialog.
+    if (err instanceof OsascriptError && err.aborted) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 /**

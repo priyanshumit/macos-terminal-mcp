@@ -14,7 +14,7 @@ A local MCP server that lets AI agents inspect and drive your macOS Terminal.app
 
 ## What it does
 
-Eleven MCP tools across three categories:
+Twelve MCP tools across three categories:
 
 ### Terminal interaction
 
@@ -22,8 +22,9 @@ Eleven MCP tools across three categories:
 |---|---|---|
 | `terminal_list` | read | Enumerate every open Terminal.app tab with tty, title, busy state, and foreground processes. |
 | `terminal_read` | read | Return the full buffer + scrollback of a specific tab, identified by tty. |
-| `terminal_execute` | **write** | Type a command into a specific tab and press Enter. Evaluated against the safety policy; runs auto/confirms/refuses depending on level. |
+| `terminal_execute` | **write** | Type a command into a specific tab and press Enter. Refuses if the target tab is busy unless `force=true`. `dry_run=true` returns the safety verdict without any side effects. |
 | `terminal_clear` | **write** | Wipe scrollback of a specific tab via Cmd+K. Briefly steals focus. |
+| `terminal_new_tab` | **write** | Open a new empty tab in Terminal.app and return its tty for follow-up calls. No dialog — low blast radius (user can close the tab). |
 
 ### Safety policy management
 

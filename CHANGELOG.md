@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-23
+
+Reviewer-driven release: a real user spent an hour using v0.4.0 and reported four findings. All four are addressed here.
+
+### Added
+
+- **`terminal_new_tab` tool** — opens an empty tab in Terminal.app (in the front window, or a new window if none are open) and returns `{tty, windowId}` so subsequent `terminal_read` / `terminal_execute` calls can target it. Requires `WRITE_TOOLS_ENABLED=1` but does NOT pop a confirmation dialog (low blast radius — the user can close an unwanted tab). Lets agents spawn safe scratch tabs without asking the user to do it manually.
+- **`terminal_execute` busy-tab check** — before running `do script`, the target tab's `busy` state is probed via JXA. If busy with a running foreground command, the call refuses by default. New `force: true` parameter bypasses the check for the rare case where you intentionally want to send stdin to a running process. Without this, `do script` would silently type into the foreground process's stdin, which the README promised would be "as if typed by the user" but in practice produced confusing results.
+- **`terminal_execute` `dry_run` parameter** — when true, returns the safety verdict + what would happen as JSON, with zero side effects (no busy probe, no dialog, no enqueue, no audit log entry, no command execution). Useful for harnesses (or models) probing a call before allowing the real version.
+
+### Fixed
+
+- **Dialog dismisses when queue resolves out-of-band** — if `pending_approve` or `pending_deny` resolves a queued command while its native dialog is still open, the dialog now auto-dismisses (SIGKILL on the underlying osascript child) instead of dangling. The user no longer sees a stale dialog asking about an already-resolved call. Implemented via a new optional `signal: AbortSignal` on `confirmWithUser` and `runJxa`, threaded from `terminal_execute`'s queue/dialog race.
+
+### Internal
+
+- `OsascriptError` gains an `aborted` flag distinct from `timedOut`. `runJxa` and `runJxaJson` accept an `AbortSignal` via `RunJxaOptions.signal`.
+- Test count: 73 → **83** (10 new regression tests across `tests/tools/execute.test.ts` and the new `tests/tools/new_tab.test.ts`).
+- Reviewer finding #5 (regex compilability validation) was already addressed in v0.4.0 via `regexErrorReason` in `tools/safety.ts`; no code change needed.
+
+### Not changed
+
+- **Reviewer finding #3 (Claude Code harness permission race)** — this is mostly external. The MCP protocol doesn't expose a tool-call cancellation primitive we can listen on, and defensive measures (artificial delay before dialog, separate ack step) cost real UX latency for a corner case. The `dry_run` parameter added in this release partially addresses the reviewer's "expose a dry-run mode" suggestion by letting harnesses probe what a call would do without side effects.
+
 ## [0.4.0] - 2026-05-23
 
 This is a security-hardening release driven by an end-to-end audit of the v0.3.0 codebase. Six findings (one HIGH, three MEDIUM, two LOW) are addressed; one LOW finding was deliberately deferred (see CHANGELOG for v0.5.x roadmap).
@@ -64,7 +88,8 @@ This is a security-hardening release driven by an end-to-end audit of the v0.3.0
 - **NPM-publish-ready packaging**: scoped name `@priyanshumit/macos-terminal-mcp`, shebang preserved, executable bit set, `publishConfig.access: public`, `files: ["dist", "README.md", "LICENSE"]`.
 - MIT license, comprehensive README with setup, permissions, scrollback config, three-tier safety reference, troubleshooting.
 
-[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/priyanshumit/macos-terminal-mcp/releases/tag/v0.2.0
