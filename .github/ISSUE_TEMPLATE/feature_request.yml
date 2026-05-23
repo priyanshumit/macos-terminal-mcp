@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose a new tool, parameter, safety pattern, or behavior
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. The more concrete the use case, the more likely it lands.
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: What are you trying to do?
+      description: Describe the real workflow this enables. "I want X" is more useful than "the tool should support Y."
+      placeholder: |
+        I want my Claude Code agent to spawn 5 scratch tabs in parallel to run independent test suites and then collect their outputs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed API or behavior
+      description: Rough sketch of the tool name, parameters, return shape. Doesn't need to be final.
+      placeholder: |
+        New tool `terminal_new_tabs` taking `count: number`, returning array of `{tty, windowId}`. Same race-fix logic as `terminal_new_tab` but batched.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Did you try doing this with existing tools? What broke down?
+      placeholder: |
+        Tried calling `terminal_new_tab` 5 times sequentially. Each call adds ~600ms latency, so 5 calls take ~3s. A batched version could share the activate+frontmost overhead.
+
+  - type: checkboxes
+    id: willingness
+    attributes:
+      label: Are you willing to help implement this?
+      options:
+        - label: I'd open a PR
+        - label: I could test a draft implementation
+        - label: I just want to flag the idea

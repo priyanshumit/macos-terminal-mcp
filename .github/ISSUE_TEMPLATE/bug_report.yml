@@ -1,0 +1,116 @@
+name: Bug report
+description: Something doesn't work as documented (or as you'd expect)
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more concrete you can be, the faster we can fix it.
+
+        Please redact any sensitive content (passwords, API keys, customer data) from command text and audit log snippets before pasting.
+
+  - type: input
+    id: server_version
+    attributes:
+      label: macos-terminal-mcp version
+      description: Check `npm list -g @priyanshumit/macos-terminal-mcp` or look at the `serverInfo.version` field in your MCP client's logs.
+      placeholder: "e.g. 0.6.2"
+    validations:
+      required: true
+
+  - type: input
+    id: macos_version
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac
+      placeholder: "e.g. 14.5 (Sonoma) or 15.1 (Sequoia)"
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      description: What's running the MCP server? Claude Code (CLI), Claude Desktop, custom, etc.
+      placeholder: "e.g. Claude Code 0.x.x"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Which tool misbehaved?
+      multiple: false
+      options:
+        - terminal_list
+        - terminal_read
+        - terminal_execute
+        - terminal_clear
+        - terminal_new_tab
+        - terminal_close_tab
+        - terminal_wait_for_idle
+        - safety_list
+        - safety_add
+        - safety_remove
+        - safety_set_level
+        - pending_list
+        - pending_approve
+        - pending_deny
+        - audit_log_tail
+        - "Multiple / not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: write_tools_enabled
+    attributes:
+      label: Was WRITE_TOOLS_ENABLED set?
+      options:
+        - "Yes (=1)"
+        - "No / unset"
+        - "Not applicable (read-only tool)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Concrete sequence — ideally the exact tool call(s) and the order, including any prior setup (terminal windows open, safety patterns added, etc.).
+      placeholder: |
+        1. Opened 3 tabs in 1 Terminal window
+        2. Called `terminal_close_tab` with tty=/dev/ttys063 (the middle tab)
+        3. Observed all 3 tabs closed instead of just one
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Only the targeted tab should close; siblings should survive.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the exact error message if any, and what you saw on screen.
+      placeholder: All 3 tabs closed. Window disappeared.
+    validations:
+      required: true
+
+  - type: textarea
+    id: audit_log
+    attributes:
+      label: Audit log snippet (optional but very helpful)
+      description: Run `audit_log_tail` with count=5–10 right after reproducing the bug. Redact any sensitive command text.
+      render: json
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Custom Terminal profiles, non-default shell, unusual safety.json, screen recording, etc.
