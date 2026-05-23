@@ -5,36 +5,52 @@ import { appendAudit } from "../safety/audit.js";
 import { isWriteToolsEnabled, writeToolsDisabledMessage } from "../safety/confirm.js";
 
 export const NEW_TAB_SCRIPT = `
+var app = Application.currentApplication();
+app.includeStandardAdditions = true;
 function safe(fn) { try { return fn(); } catch (e) { return null; } }
+function snapshotTabs(terminal) {
+  // Returns { tty -> windowId } for every tab in every window.
+  const out = {};
+  const wins = terminal.windows();
+  for (let wi = 0; wi < wins.length; wi++) {
+    const winId = safe(function () { return wins[wi].id(); });
+    const tabs = wins[wi].tabs();
+    for (let ti = 0; ti < tabs.length; ti++) {
+      const t = safe(function () { return tabs[ti].tty(); });
+      if (t) out[t] = winId;
+    }
+  }
+  return out;
+}
 (function newTab() {
   const terminal = Application("Terminal");
+  const systemEvents = Application("System Events");
   terminal.activate();
-  const wins = terminal.windows();
-  // do script with empty command + no "in" → new window. With "in: front
-  // window" → new tab in that window. Prefer a new tab in the front window
-  // when one exists, otherwise let it create a new window.
-  let newTab;
-  if (wins.length > 0) {
-    newTab = terminal.doScript("", { in: wins[0] });
-  } else {
-    newTab = terminal.doScript("");
-  }
-  const tty = safe(function () { return newTab.tty(); }) || "";
-  let windowId = null;
-  try {
-    const after = terminal.windows();
-    for (let i = 0; i < after.length; i++) {
-      const ts = after[i].tabs();
-      for (let j = 0; j < ts.length; j++) {
-        if (safe(function () { return ts[j].tty(); }) === tty) {
-          windowId = safe(function () { return after[i].id(); });
-          break;
-        }
+  const before = snapshotTabs(terminal);
+  const wasEmpty = Object.keys(before).length === 0;
+  // Cmd+T opens a new tab in the front window; Cmd+N opens a new window when
+  // there are none.
+  systemEvents.keystroke(wasEmpty ? "n" : "t", { using: "command down" });
+  // Poll for the new tab's tty to appear. Each iteration waits 100ms, up to ~2s.
+  let newTty = null;
+  let newWindowId = null;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    delay(0.1);
+    const after = snapshotTabs(terminal);
+    const keys = Object.keys(after);
+    for (let i = 0; i < keys.length; i++) {
+      if (!(keys[i] in before)) {
+        newTty = keys[i];
+        newWindowId = after[keys[i]];
+        break;
       }
-      if (windowId !== null) break;
     }
-  } catch (e) { /* best-effort */ }
-  return JSON.stringify({ tty, windowId });
+    if (newTty !== null) break;
+  }
+  if (newTty === null) {
+    throw new Error("terminal_new_tab: no new tab appeared after Cmd+" + (wasEmpty ? "N" : "T") + ". Accessibility permission may be missing — grant via System Settings → Privacy & Security → Accessibility.");
+  }
+  return JSON.stringify({ tty: newTty, windowId: newWindowId });
 })();
 `;
 
@@ -72,7 +88,7 @@ export function register(server: McpServer): void {
     "terminal_new_tab",
     {
       description:
-        "Open a new empty tab in Terminal.app (in the frontmost window, or a new window if none are open). Returns {tty, windowId} for the new tab. Use the returned tty in subsequent terminal_read / terminal_execute calls. NOTE: this tool does NOT execute any command in the new tab — to run a command, call terminal_execute against the returned tty. Requires WRITE_TOOLS_ENABLED=1 but does NOT pop a confirmation dialog (low blast radius — the user can close an unwanted tab).",
+        "Open a new empty tab in Terminal.app (in the frontmost window, or a new window if none are open). Returns {tty, windowId} for the new tab. Use the returned tty in subsequent terminal_read / terminal_execute calls. NOTE: this tool does NOT execute any command in the new tab — to run a command, call terminal_execute against the returned tty. Requires WRITE_TOOLS_ENABLED=1 but does NOT pop a confirmation dialog (low blast radius — the user can close an unwanted tab). Briefly steals focus to Terminal.app to deliver a Cmd+T keystroke, so also requires Accessibility permission (System Settings → Privacy & Security → Accessibility).",
     },
     newTabHandler,
   );

@@ -83,4 +83,48 @@ describe("terminal_new_tab handler", () => {
     const script = (mockedRunJxa.mock.calls[0]?.[0] as string) ?? "";
     expect(script).not.toContain("displayDialog");
   });
+
+  // Regression: v0.5.0 shipped with `terminal.doScript("", { in: wins[0] })`
+  // which silently no-ops on current macOS and returns the existing tab — the
+  // tool would claim success but no new tab existed. The fix uses System Events
+  // Cmd+T (or Cmd+N when no window exists) and diffs tab tty-sets before/after.
+  it("uses System Events keystroke to create the tab, not doScript('')", async () => {
+    mockedRunJxa.mockResolvedValue('{"tty":"/dev/ttys099","windowId":131200}');
+
+    await newTabHandler();
+
+    const script = (mockedRunJxa.mock.calls[0]?.[0] as string) ?? "";
+    expect(script).toContain("System Events");
+    expect(script).toContain("keystroke");
+    expect(script).toContain("command down");
+    // The broken approach must not reappear.
+    expect(script).not.toMatch(/doScript\s*\(\s*""/);
+  });
+
+  it("snapshots tabs before+after to detect the actually-new tab", async () => {
+    mockedRunJxa.mockResolvedValue('{"tty":"/dev/ttys099","windowId":131200}');
+
+    await newTabHandler();
+
+    const script = (mockedRunJxa.mock.calls[0]?.[0] as string) ?? "";
+    // Before/after snapshot pattern: the script enumerates tabs twice and finds
+    // the one that wasn't present before.
+    expect(script).toMatch(/snapshotTabs|before|after/);
+    expect(script).toMatch(/!\s*\(\s*\S+\s*in\s+before\s*\)/);
+  });
+
+  it("propagates the JXA error when no new tab appears (Accessibility missing)", async () => {
+    mockedRunJxa.mockRejectedValue(
+      new Error(
+        "terminal_new_tab: no new tab appeared after Cmd+T. Accessibility permission may be missing — grant via System Settings → Privacy & Security → Accessibility.",
+      ),
+    );
+
+    const result = await newTabHandler();
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toMatch(/terminal_new_tab failed/);
+    expect(text).toMatch(/Accessibility/);
+  });
 });

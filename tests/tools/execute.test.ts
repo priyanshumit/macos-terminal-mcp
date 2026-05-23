@@ -42,6 +42,7 @@ vi.mock("../../src/safety/patterns.js", async () => {
 import { runJxa } from "../../src/applescript.js";
 import { confirmWithUser, isWriteToolsEnabled } from "../../src/safety/confirm.js";
 import { loadSafetyConfig } from "../../src/safety/patterns.js";
+import { listPending, resolvePending } from "../../src/safety/queue.js";
 import { executeHandler } from "../../src/tools/execute.js";
 
 const mockedRunJxa = vi.mocked(runJxa);
@@ -282,5 +283,71 @@ describe("terminal_execute handler", () => {
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
     expect(parsed.verdict).toBe("requires_approval");
     expect(parsed.wouldPromptUser).toBe(true);
+  });
+
+  // ---------- Reviewer #4: dialog auto-dismisses when queue resolves first ----------
+
+  it("aborts the dialog when pending_approve resolves the queue out-of-band (reviewer #4)", async () => {
+    setRunJxaForIdleTab();
+
+    // Simulate a real dialog: hangs forever until aborted. Capture the signal
+    // so we can assert the handler aborted it.
+    let capturedSignal: AbortSignal | undefined;
+    mockedConfirm.mockImplementation(
+      (req) =>
+        new Promise<boolean>((_resolve, reject) => {
+          capturedSignal = req.signal;
+          req.signal?.addEventListener("abort", () => {
+            // Real confirmWithUser catches the aborted OsascriptError and
+            // returns false. executeHandler ignores the dialog promise once
+            // the queue resolves first, so settling either way is fine — we
+            // just need the dialog to stop pending.
+            reject(new Error("dialog aborted"));
+          });
+        }),
+    );
+
+    // Resolve the queued entry ~20ms after executeHandler starts so the
+    // dialog promise is definitely the slower path.
+    const racer = (async (): Promise<void> => {
+      for (let i = 0; i < 50; i++) {
+        await new Promise((r) => setTimeout(r, 5));
+        const entries = listPending();
+        if (entries.length === 1) {
+          resolvePending(entries[0].id, true, "queue");
+          return;
+        }
+      }
+      throw new Error("queue entry never appeared");
+    })();
+
+    const [result] = await Promise.all([
+      executeHandler({ tty: "/dev/ttys003", command: "cargo build" }),
+      racer,
+    ]);
+
+    expect(result.isError).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toMatch(/approved via queue/);
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it("does NOT abort the dialog when it wins the race (signal stays untouched)", async () => {
+    setRunJxaForIdleTab();
+    let capturedSignal: AbortSignal | undefined;
+    mockedConfirm.mockImplementation(async (req) => {
+      capturedSignal = req.signal;
+      return true; // dialog resolves immediately with Allow
+    });
+
+    const result = await executeHandler({
+      tty: "/dev/ttys003",
+      command: "cargo build",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toMatch(/approved via dialog/);
+    // Signal exists but was never tripped — handler only aborts on queue-wins.
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal?.aborted).toBe(false);
   });
 });

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-23
+
+Live end-to-end testing of v0.5.0 immediately after release surfaced one shipped-broken tool and three uncovered code paths. This is the fix + regression coverage.
+
+### Fixed
+
+- **`terminal_new_tab` actually creates a new tab now.** v0.5.0 implemented this via `terminal.doScript("", { in: wins[0] })`, which silently no-ops on current macOS — the call returned a reference to an existing tab, whose `tty()` the handler dutifully returned. The tool claimed success while creating nothing. Patched to use System Events `Cmd+T` (or `Cmd+N` when no Terminal window exists), with a before/after snapshot of all tab ttys to identify the actually-new tab. Errors out with an Accessibility-permission hint if no new tab appears within ~2s. As a side effect, `terminal_new_tab` now also requires Accessibility permission (same as `terminal_clear`); the tool description was updated to call this out.
+
+### Internal
+
+- **Test coverage backfill.** Three v0.5.0 code paths shipped without tests; this release adds them:
+  - `tests/applescript.test.ts` (new file): 5 tests for `runJxa`'s `AbortSignal` plumbing (pre-aborted no-spawn, mid-flight SIGKILL, normal completion with listener cleanup, post-settle abort no-op, `aborted` vs `timedOut` distinction). The reviewer-#4 fix shipped in v0.5.0 with this code path untested.
+  - `tests/tools/execute.test.ts`: 2 tests for the queue/dialog race (`dialogAbort.abort()` fires when queue resolves first; signal stays untouched when the dialog wins).
+  - `tests/tools/new_tab.test.ts`: 3 tests asserting the JXA uses System Events keystroke (not the broken `doScript("")`), uses the before/after-snapshot pattern, and surfaces the Accessibility-missing error. The original v0.5.0 tests mocked `runJxa` away, which is why the empty-`doScript` no-op was never caught — these tests now lock the JXA shape.
+- Test count: 83 → **93** (10 new regression tests).
+- Lint passes; `prepublishOnly` continues to gate on lint + typecheck + tests + build.
+
+### Known minor issue
+
+- **New tab sometimes opens as a new window** rather than as a tab in the frontmost window, due to a race between `terminal.activate()` and the `keystroke("t")` delivery. The returned `{tty, windowId}` is correct regardless and the agent gets a working idle tty either way, so this is cosmetic. Will be addressed in a follow-up by inserting a small post-activate delay.
+
 ## [0.5.0] - 2026-05-23
 
 Reviewer-driven release: a real user spent an hour using v0.4.0 and reported four findings. All four are addressed here.
@@ -88,7 +109,8 @@ This is a security-hardening release driven by an end-to-end audit of the v0.3.0
 - **NPM-publish-ready packaging**: scoped name `@priyanshumit/macos-terminal-mcp`, shebang preserved, executable bit set, `publishConfig.access: public`, `files: ["dist", "README.md", "LICENSE"]`.
 - MIT license, comprehensive README with setup, permissions, scrollback config, three-tier safety reference, troubleshooting.
 
-[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.2.0...v0.3.0
