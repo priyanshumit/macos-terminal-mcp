@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-23
+
+### Fixed
+
+- **`serverInfo.version` reflects the actual package version.** The MCP `initialize` handshake response used to report a hardcoded `"0.1.0"` regardless of the published version. Now reads from `package.json` at startup so it stays in sync automatically. Surfaced during the v0.5.1 post-publish smoke test.
+
 ## [0.5.1] - 2026-05-23
 
 Live end-to-end testing of v0.5.0 immediately after release surfaced one shipped-broken tool and three uncovered code paths. This is the fix + regression coverage.
@@ -109,7 +115,8 @@ This is a security-hardening release driven by an end-to-end audit of the v0.3.0
 - **NPM-publish-ready packaging**: scoped name `@priyanshumit/macos-terminal-mcp`, shebang preserved, executable bit set, `publishConfig.access: public`, `files: ["dist", "README.md", "LICENSE"]`.
 - MIT license, comprehensive README with setup, permissions, scrollback config, three-tier safety reference, troubleshooting.
 
-[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.3.0...v0.4.0
