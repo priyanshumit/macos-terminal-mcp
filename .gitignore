@@ -6,3 +6,7 @@ dist/
 .env.local
 # Local Claude Code MCP config — user-specific (env vars, paths).
 .mcp.json
+
+# Local launch prep materials (marketing copy, response templates, timelines).
+# Not part of the shipped product.
+launch/
