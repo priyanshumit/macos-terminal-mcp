@@ -131,7 +131,7 @@ To enable write tools, add the env block:
 }
 ```
 
-Restart Claude Code. You should see the eleven tools listed.
+Restart Claude Code. You should see the fifteen tools listed.
 
 ## Three-tier safety model
 
