@@ -130,19 +130,37 @@ describe("terminal_new_tab handler", () => {
 
   // Regression: v0.5.2 known-issue — activate() returns before the window
   // server makes Terminal frontmost, so the keystroke can land on whichever
-  // app was previously frontmost (opens new window instead of new tab). Fix:
-  // insert a small delay between activate() and the keystroke.
-  it("inserts a post-activate delay before the keystroke", async () => {
+  // app was previously frontmost (opens new window instead of new tab). Fix
+  // chain: insert a delay between activate() and the keystroke (v0.6.0), and
+  // force-frontmost via System Events with branching warm/cold delays (v0.6.1).
+  it("inserts a delay and forces frontmost before the keystroke", async () => {
     mockedRunJxa.mockResolvedValue('{"tty":"/dev/ttys099","windowId":131200}');
 
     await newTabHandler();
 
     const script = (mockedRunJxa.mock.calls[0]?.[0] as string) ?? "";
     const activateIdx = script.indexOf("terminal.activate()");
-    const delayIdx = script.indexOf("delay(0.15)");
+    const frontmostIdx = script.search(/applicationProcesses\["Terminal"\]\.frontmost\s*=\s*true/);
+    const delayIdx = script.search(/delay\(\s*0\.[1-9]/);
     const keystrokeIdx = script.indexOf("systemEvents.keystroke");
+
     expect(activateIdx).toBeGreaterThan(-1);
+    expect(frontmostIdx).toBeGreaterThan(activateIdx);
     expect(delayIdx).toBeGreaterThan(activateIdx);
     expect(keystrokeIdx).toBeGreaterThan(delayIdx);
+  });
+
+  // Regression for v0.6.1: cold-start when Terminal isn't running. The warm
+  // path's 150ms delay was way too short — activate() must launch Terminal,
+  // which takes >1s on most macs. Fix uses `terminal.running()` to branch
+  // into a polling wait of up to ~3s for cold starts.
+  it("handles cold start by polling for terminal.running()", async () => {
+    mockedRunJxa.mockResolvedValue('{"tty":"/dev/ttys099","windowId":131200}');
+
+    await newTabHandler();
+
+    const script = (mockedRunJxa.mock.calls[0]?.[0] as string) ?? "";
+    expect(script).toMatch(/terminal\.running\(\)/);
+    expect(script).toMatch(/wasRunning/);
   });
 });

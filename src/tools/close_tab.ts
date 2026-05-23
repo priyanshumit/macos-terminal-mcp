@@ -21,9 +21,11 @@ function safe(fn) { try { return fn(); } catch (e) { return null; } }
         if (busy && !force) {
           return JSON.stringify({ status: "busy", tty: targetTty });
         }
-        // Terminal.app's AppleScript dictionary exposes a "close" verb on tabs;
-        // calling it returns immediately and the tab vanishes.
-        t.close();
+        // Terminal.app's AppleScript dictionary does NOT expose "close" on tab
+        // objects — only on window objects. Each tab is enumerated as its own
+        // "window" entry though (a quirk of the dictionary), so closing the
+        // enclosing "w" reference closes just this tab in the physical window.
+        w.close();
         return JSON.stringify({ status: "closed", tty: targetTty, killedRunningCommand: busy });
       }
     }

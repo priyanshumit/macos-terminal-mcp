@@ -95,6 +95,10 @@ describe("terminal_close_tab handler", () => {
     const script = buildCloseTabScript("/dev/ttys042", true);
     expect(script).toContain('"/dev/ttys042"');
     expect(script).toContain("true");
-    expect(script).toContain("t.close()");
+    // Terminal.app's AppleScript dictionary doesn't expose close on tab objects,
+    // only on window objects. Since each tab is enumerated as its own "window",
+    // closing the enclosing `w` reference closes the tab.
+    expect(script).toContain("w.close()");
+    expect(script).not.toContain("t.close()");
   });
 });
