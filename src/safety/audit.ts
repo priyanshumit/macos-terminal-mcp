@@ -1,4 +1,4 @@
-import { appendFile, chmod, mkdir } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SafetyLevel } from "./patterns.js";
@@ -66,4 +66,35 @@ export async function appendAudit(
       `[macos-terminal-mcp] audit log write failed: ${(err as Error).message}\n`,
     );
   }
+}
+
+/**
+ * Read the last N JSONL entries from the audit log. Returns [] if the file
+ * does not exist (no write tool calls have happened yet).
+ *
+ * Malformed lines are silently skipped — the audit log is best-effort writes
+ * and a corrupt entry shouldn't break the read path.
+ */
+export async function readAuditTail(
+  count: number,
+  path: string = AUDIT_LOG_PATH,
+): Promise<AuditEntry[]> {
+  let content: string;
+  try {
+    content = await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
+  const lines = content.split("\n").filter((l) => l.length > 0);
+  const tail = lines.slice(-count);
+  const entries: AuditEntry[] = [];
+  for (const line of tail) {
+    try {
+      entries.push(JSON.parse(line) as AuditEntry);
+    } catch {
+      // Defensive: skip malformed lines.
+    }
+  }
+  return entries;
 }

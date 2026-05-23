@@ -25,7 +25,38 @@ function snapshotTabs(terminal) {
 (function newTab() {
   const terminal = Application("Terminal");
   const systemEvents = Application("System Events");
+  // Detect cold start: if Terminal isn't running yet, activate() has to LAUNCH
+  // it, which takes much longer than the warm-path 150ms delay. We then wait
+  // for the new process to be ready before sending the keystroke.
+  const wasRunning = (function () { try { return terminal.running(); } catch (e) { return true; } })();
   terminal.activate();
+  // activate() returns before the window server actually makes Terminal frontmost,
+  // and macOS sometimes refuses to honor activate() when another app is in use
+  // by the user. System Events accessibility-layer "frontmost = true" is a more
+  // forceful way to make Terminal the key app — required for Cmd+T to land on it.
+  try { Application("System Events").applicationProcesses["Terminal"].frontmost = true; } catch (e) { /* best-effort */ }
+  // Cold start: poll up to 3s for Terminal to come up. Warm start: short settle.
+  if (!wasRunning) {
+    for (let i = 0; i < 30; i++) {
+      delay(0.1);
+      try { if (terminal.running()) break; } catch (e) { /* keep waiting */ }
+    }
+    delay(0.5);
+    // Cold-start: Terminal almost always auto-opens a default window per the
+    // user's "When Terminal Starts" preference. Since Terminal wasn't running
+    // before, ANY tab that exists now is the new one we owe the caller — return
+    // it directly. Don't ALSO send Cmd+T (which would create a second tab the
+    // caller didn't ask for; reported by user during v0.6.1 verification).
+    const afterLaunch = snapshotTabs(terminal);
+    const launchedKeys = Object.keys(afterLaunch);
+    if (launchedKeys.length > 0) {
+      return JSON.stringify({ tty: launchedKeys[0], windowId: afterLaunch[launchedKeys[0]] });
+    }
+    // Cold launch produced no default window (user disabled it in prefs) — fall
+    // through to the keystroke path so Cmd+N creates one.
+  } else {
+    delay(0.3);
+  }
   const before = snapshotTabs(terminal);
   const wasEmpty = Object.keys(before).length === 0;
   // Cmd+T opens a new tab in the front window; Cmd+N opens a new window when

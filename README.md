@@ -14,7 +14,7 @@ A local MCP server that lets AI agents inspect and drive your macOS Terminal.app
 
 ## What it does
 
-Twelve MCP tools across three categories:
+Fifteen MCP tools across four categories:
 
 ### Terminal interaction
 
@@ -25,6 +25,8 @@ Twelve MCP tools across three categories:
 | `terminal_execute` | **write** | Type a command into a specific tab and press Enter. Refuses if the target tab is busy unless `force=true`. `dry_run=true` returns the safety verdict without any side effects. |
 | `terminal_clear` | **write** | Wipe scrollback of a specific tab via Cmd+K. Briefly steals focus. |
 | `terminal_new_tab` | **write** | Open a new empty tab in Terminal.app and return its tty for follow-up calls. No dialog — low blast radius (user can close the tab). |
+| `terminal_close_tab` | **write** | Close a specific tab by tty. Refuses busy tabs unless `force=true`. No dialog. |
+| `terminal_wait_for_idle` | read | Block until the target tab is no longer busy, or until `timeout_seconds` (default 60, max 600). Polls every 250ms inside a single JXA call. |
 
 ### Safety policy management
 
@@ -42,6 +44,12 @@ Twelve MCP tools across three categories:
 | `pending_list` | read | Snapshot of commands currently awaiting approval. |
 | `pending_approve` | **write** | Approve a queued command by id. Triggers its own confirmation dialog. |
 | `pending_deny` | **write** | Deny a queued command. |
+
+### Observability
+
+| Tool | Read/Write | Description |
+|---|---|---|
+| `audit_log_tail` | read | Read the last N entries from the audit log. Default count 20, max 1000. Returns parsed JSON array of `{timestamp, tool, outcome, ...}` entries. |
 
 Write tools are **off by default**. Set `WRITE_TOOLS_ENABLED=1` in the server's environment to enable them. Even when enabled, every non-`safe` operation triggers a native macOS confirmation dialog.
 

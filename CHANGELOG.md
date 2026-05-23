@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-23
+
+Follow-up to v0.6.0 after live end-to-end testing of every new tool. Three real bugs surfaced that the v0.6.0 unit tests (all mocking `runJxa`) couldn't have caught.
+
+### Fixed
+
+- **`terminal_new_tab` warm-path race**, take three. v0.6.0's 150ms post-activate delay wasn't enough when another app holds keyboard focus — macOS sometimes silently refuses to honor `activate()` for "background" apps. Now also forces `System Events.applicationProcesses["Terminal"].frontmost = true` (accessibility-layer override) plus a longer 300ms warm-path settle. Live-verified: warm Cmd+T now reliably adds a tab to the front window instead of opening a new window.
+- **`terminal_new_tab` cold-start failure** — when Terminal isn't running, `terminal.activate()` has to launch it (~1-2s on most machines), much longer than the warm-path 150ms delay. Result was a deterministic "no new tab appeared" timeout. Now detects cold-start via `terminal.running()`, polls up to 3s for the launch to complete, then RETURNS THE AUTO-OPENED DEFAULT WINDOW directly instead of also sending Cmd+T (which would create a second redundant tab). Falls through to Cmd+N if the user has disabled the "When Terminal Starts" auto-window preference.
+- **`terminal_close_tab` always errored with `-1708` "Message not understood"** — v0.6.0 called `t.close()` on tab references, but Terminal.app's AppleScript dictionary doesn't expose `close` on tab objects (only on window objects). Since each tab is enumerated as its own "window" in the dictionary's view (a Terminal.app quirk), the fix is calling `w.close()` on the enclosing reference. Live-verified.
+
+### Internal
+
+- `tests/tools/new_tab.test.ts` and `tests/tools/close_tab.test.ts` updated to match the new JXA shapes. New tests lock in: System Events `frontmost = true` ordering vs. keystroke, `terminal.running()` cold-start branching, and the `t.close()` → `w.close()` change.
+- Test count unchanged at **118** (existing tests updated, not added).
+
+## [0.6.0] - 2026-05-23
+
+Tool-surface completeness release. Three new tools fill known asymmetries in the v0.5.x API (create-without-destroy for tabs, start-without-await for commands, write-without-read for the audit log) and one polish patch closes a known-issue race.
+
+### Added
+
+- **`terminal_close_tab` tool** — close a specific tab by tty. Fills the gap left by v0.5.0's `terminal_new_tab` (create) without a matching destroy. Refuses busy tabs unless `force=true` (closing a busy tab kills the foreground process). Requires `WRITE_TOOLS_ENABLED=1` but no dialog (low blast radius for idle tabs; `force=true` is a deliberate caller decision). Audit-logged.
+- **`terminal_wait_for_idle` tool** — block until the target tab's busy state becomes false, or until timeout. Polling happens inside a single JXA invocation (250ms interval) so it's one osascript call, not many. `timeout_seconds` defaults to 60, max 600. Returns one of `{idle, waited_ms}` / `{timed_out, waited_ms}` / `{missing, waited_ms}`. Read-only — no env gate. Unlocks sequential workflows like "run `npm install`, then run `npm test`."
+- **`audit_log_tail` tool** — read the last N entries from `~/.local/state/macos-terminal-mcp/audit.log` (or `$XDG_STATE_HOME` equivalent). Default count 20, max 1000. Read-only and not itself logged. Makes the v0.4.0 audit feature visible to agents and users instead of "lights on in a closed room."
+
+### Fixed
+
+- **`terminal_new_tab` activate/keystroke race** — v0.5.1's documented known issue. `terminal.activate()` returns before the window server actually makes Terminal frontmost, so the Cmd+T keystroke could land on whichever app was previously frontmost (opening a new window instead of a new tab). Added a 150ms `delay` after `activate()`. A regression test in `tests/tools/new_tab.test.ts` locks the order: activate → delay → keystroke.
+
+### Internal
+
+- `safety/audit.ts` gains a `readAuditTail(count, path?)` function (sibling to `appendAudit`).
+- 5 new audit-log read tests, 4 audit_log_tail handler tests, 7 close_tab handler/script tests, 7 wait_for_idle handler/script tests, 1 new_tab race-fix regression test.
+- Test count: 93 → **117** (24 new tests across 3 new test files + additions to 2 existing).
+- Tool count: 12 → **15**.
+
 ## [0.5.2] - 2026-05-23
 
 ### Fixed
@@ -115,7 +151,9 @@ This is a security-hardening release driven by an end-to-end audit of the v0.3.0
 - **NPM-publish-ready packaging**: scoped name `@priyanshumit/macos-terminal-mcp`, shebang preserved, executable bit set, `publishConfig.access: public`, `files: ["dist", "README.md", "LICENSE"]`.
 - MIT license, comprehensive README with setup, permissions, scrollback config, three-tier safety reference, troubleshooting.
 
-[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/priyanshumit/macos-terminal-mcp/compare/v0.4.0...v0.5.0

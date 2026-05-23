@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appendAudit } from "../../src/safety/audit.js";
+import { appendAudit, readAuditTail } from "../../src/safety/audit.js";
 
 describe("appendAudit", () => {
   let tmpDir: string;
@@ -115,5 +115,60 @@ describe("appendAudit", () => {
     expect(entry.timestamp).not.toBe("1990-01-01T00:00:00.000Z");
     expect(entry.timestamp >= before).toBe(true);
     expect(entry.timestamp <= after).toBe(true);
+  });
+});
+
+describe("readAuditTail", () => {
+  let tmpDir: string;
+  let tmpPath: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "macos-terminal-mcp-audit-tail-"));
+    tmpPath = join(tmpDir, "audit.log");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns [] when the file does not exist", async () => {
+    const entries = await readAuditTail(20, join(tmpDir, "missing.log"));
+    expect(entries).toEqual([]);
+  });
+
+  it("returns all entries when count exceeds file length", async () => {
+    await appendAudit({ tool: "a", outcome: "success" }, tmpPath);
+    await appendAudit({ tool: "b", outcome: "denied" }, tmpPath);
+    const entries = await readAuditTail(100, tmpPath);
+    expect(entries).toHaveLength(2);
+    expect(entries[0].tool).toBe("a");
+    expect(entries[1].tool).toBe("b");
+  });
+
+  it("returns only the last N entries when there are more", async () => {
+    for (const tool of ["a", "b", "c", "d", "e"]) {
+      await appendAudit({ tool, outcome: "success" }, tmpPath);
+    }
+    const entries = await readAuditTail(2, tmpPath);
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.tool)).toEqual(["d", "e"]);
+  });
+
+  it("skips malformed lines silently", async () => {
+    await appendAudit({ tool: "good", outcome: "success" }, tmpPath);
+    // Corrupt the file by appending a non-JSON line
+    const { appendFile } = await import("node:fs/promises");
+    await appendFile(tmpPath, "this is not json\n", "utf8");
+    await appendAudit({ tool: "alsoGood", outcome: "success" }, tmpPath);
+
+    const entries = await readAuditTail(10, tmpPath);
+    expect(entries.map((e) => e.tool)).toEqual(["good", "alsoGood"]);
+  });
+
+  it("filters out empty lines (trailing newline behavior)", async () => {
+    await appendAudit({ tool: "only", outcome: "success" }, tmpPath);
+    const entries = await readAuditTail(10, tmpPath);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].tool).toBe("only");
   });
 });
