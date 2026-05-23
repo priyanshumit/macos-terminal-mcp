@@ -193,6 +193,25 @@ Whichever path resolves first wins. For solo desktop use, the dialog is the cano
 
 Pending entries auto-expire after 10 minutes. The queue is in-memory only — a server restart drops all pending entries.
 
+## Privacy & data
+
+**No network, no telemetry.** The server speaks MCP over stdio to your local Claude client. It makes zero outbound network calls — no analytics, no crash reporting, no auto-update pings.
+
+**What is stored on disk:**
+
+| File | Path | Contents | Permissions |
+|---|---|---|---|
+| Audit log | `~/.local/state/macos-terminal-mcp/audit.log` | One JSON line per write-tool call: tool name, tty, **full command text**, safety level, matched pattern, outcome, timestamp | `0o600` (owner read/write only); parent dir `0o700` |
+| Safety config | `~/.config/macos-terminal-mcp/safety.json` | User-added regex patterns with their levels and descriptions | default umask |
+
+**Important caveat for secrets handling**: `terminal_execute` writes the **full command text** to the audit log. If a command contains a password, API key, or other secret, that secret ends up on disk in plaintext (owner-readable only). Mitigations:
+
+- Delete the log at any time: `rm ~/.local/state/macos-terminal-mcp/audit.log`
+- Default forbidden patterns already block common secret-leak vectors (`>\s*/etc/`, `\bcurl\b[^|;]*\|`, `\|\s*(bash|sh|zsh)\b`, `~/.ssh`, `/etc/passwd`, `/etc/shadow`)
+- Add your own forbidden patterns for company-specific secret formats via `safety_add`
+
+**Where the audit log helps**: post-hoc review of what an AI agent ran on your machine, debugging unexpected command refusals, and satisfying audit requirements in regulated environments.
+
 ## Usage examples
 
 Once registered, from Claude Code:
