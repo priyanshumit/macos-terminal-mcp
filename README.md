@@ -10,7 +10,9 @@
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/@priyanshumit/macos-terminal-mcp.svg" alt="MIT license"></a>
 </p>
 
-A local MCP server that lets AI agents inspect and drive your macOS Terminal.app tabs — list windows, read scrollback, execute commands, and clear buffers, all gated by a three-tier safety model plus per-call user confirmation for any write operation.
+A local MCP server that lets AI agents inspect and drive your *running* macOS Terminal.app session — list tabs with busy state, read scrollback, execute commands, manage tabs, all gated by a hardened three-tier safety policy plus per-call user confirmation for any write operation. Shell state, env, scrollback persist across calls because it operates on your live Terminal.app, not subprocesses.
+
+See [Related work](#related-work) at the bottom for how this compares to other shell-MCP servers.
 
 ## What it does
 
@@ -251,6 +253,20 @@ Terminal.app's scrollback cap is profile-controlled. Increase under Terminal.app
 
 **Command refused as "forbidden" but I have a legit reason**
 Forbidden patterns intentionally cannot be approved via the tool. Either run the command yourself in a real terminal, or use `safety_set_level({pattern: "...", level: "requires_approval"})` to downgrade — you'll see a downgrade warning in the confirmation dialog.
+
+## Related work
+
+Several shell-MCP servers exist in adjacent niches. The right pick depends on which terminal you use and whether your workflow needs shell state to persist between calls.
+
+| Project | Niche | When to pick it |
+|---|---|---|
+| [`cfdude/mac-shell-mcp`](https://github.com/cfdude/mac-shell-mcp) | Subprocess shell with the same three-tier safety pattern (safe / requires_approval / forbidden) + approval queue. | One-shot commands without state. Simpler architecture; same safety tiers. |
+| [`ferrislucas/iterm-mcp`](https://github.com/ferrislucas/iterm-mcp) | iTerm2 driver with `write_to_terminal`, `read_terminal_output`, `send_control_character`. ~556 stars. | You use iTerm2 and are comfortable supervising the agent yourself (no built-in safety policy by design). |
+| [`steipete/macos-automator-mcp`](https://github.com/steipete/macos-automator-mcp) | Generic AppleScript/JXA runner, 200+ prebuilt recipes, includes a `terminal_app_run_command_new_tab` helper. | You want broad macOS automation beyond just Terminal.app, and accept that there's no command-level safety policy. |
+| [`joshrutkowski/applescript-mcp`](https://github.com/joshrutkowski/applescript-mcp) / [`peakmojo/applescript-mcp`](https://github.com/peakmojo/applescript-mcp) / [`adamrdrew/applescript-mcp`](https://github.com/adamrdrew/applescript-mcp) | Generic AppleScript MCPs spanning Calendar, Clipboard, Finder, Notifications, etc. | You want macOS app automation, not specifically Terminal.app. |
+| `macos-terminal-mcp` (this) | Drives your *running* Terminal.app session — tab list with busy state, scrollback read, tab management, hardened three-tier safety policy. | You want the agent to operate inside your live shell with state preserved across calls, and you want defense-in-depth (ReDoS guard, NFKC normalization, dialog-injection sanitization, audit log). |
+
+The three-tier safety pattern itself originated in `cfdude/mac-shell-mcp` (or thereabouts) — this project takes that approach and layers on additional defenses plus the live-session Terminal.app integration. The two tools are complementary; pick by workflow.
 
 ## License
 
